@@ -1,51 +1,52 @@
-const recentMessages = new Map(); // Store recent messages with user ID and timestamp
-// not to flex but this is by @NiceSapien
+const recentMessages = new Map();
+const SPAM_CHANNEL_ID = '814828261044650064';
+const TIMEOUT_DURATION = 2 * 60 * 1000;
+
 module.exports = {
     name: "Spam",
     description: "Advanced AI Algorithms to automatically prevent spam in the server.",
     async execute(message) {
         const member = message.member;
-        const joinTime = member.joinedTimestamp;
         const now = Date.now();
-      //  const joinAge = now - joinTime;
-       const hasHyperlink = message.content.includes('http://') || message.content.includes('https://');
+        const hasHyperlink = message.content.includes('http://') || message.content.includes('https://');
+        
         if (hasHyperlink) {
             const userId = message.author.id;
             const messageData = {
                 content: message.content,
                 channelId: message.channel.id,
                 timestamp: now,
-            }
+                id: message.id
+            };
+
             if (!recentMessages.has(userId)) {
                 recentMessages.set(userId, []);
             }
 
             const userMessages = recentMessages.get(userId);
             userMessages.push(messageData);
-            const uniqueChannels = new Set(userMessages.map((msg) => msg.channelId));
-            if (uniqueChannels.size > 6) {
+
+            const recentSpams = userMessages.filter(msg => now - msg.timestamp <= 30 * 1000);
+            const uniqueLinks = new Set(recentSpams.map(msg => msg.content));
+
+            if (uniqueLinks.size === 1 && recentSpams.length >= 6) {
+                const promises = recentSpams.map(async (spamMsg) => {
+                    try {
+                        await message.channel.messages.delete(spamMsg.id);
+                    } catch (deleteError) {
+                        console.error(`Failed to delete message: ${deleteError}`);
+                    }
+                });
+
                 try {
-                    member.send("You were banned for spamming. If you think this was a mistake, please rejoin in an hour. If you can't find the link to join, check out https://sketchware.pro")
-                    await member.ban({ reason: 'Spam.', deleteMessageSeconds: 1000 * 60 * 10 });
-                    console.log(`Banned ${message.author.tag} for spamming.`);
-                    message.channel.send(`${message.author} has been banned by NiceSapien Tech. Advanced Security Systems & Advanced Safety Algorithms 2.0 for **1 hour for spamming hyperlinks** after joining recently.`);
-
-                    // Unban after 1 hour
-                    setTimeout(async () => {
-                        try {
-                            await message.guild.members.unban(userId, 'Automatic unban after 1 hour.');
-                            console.log(`Unbanned ${message.author.tag}.`);
-                        } catch (unbanError) {
-                            console.error(`Error unbanning ${message.author.tag}:`, unbanError);
-                        }
-                    }, 60 * 60 * 1000);
-
-                } catch (banError) {
-                    console.error(`Error banning ${message.author.tag}:`, banError);
-                    message.channel.send("It seems that the server admins have a massive skill issue and were unable to provide ban permissions.");
+                    await member.timeout(TIMEOUT_DURATION, 'Spamming');
+                    message.guild.channels.cache.get(SPAM_CHANNEL_ID).send(`User ${member} was timed out for 2 minutes for: Spamming\n\n*Footer: NikaTech Spam Protection Gen 2*`);
+                } catch (timeoutError) {
+                    message.guild.channels.cache.get(SPAM_CHANNEL_ID).send(`Mute and Delete messages permission not found. Unable to timeout ${member} for spamming.\n\n*Footer: NikaTech Spam Protection Gen 2*`);
+                    console.error(`Timeout failed for ${member.user.tag}:`, timeoutError);
                 }
 
-                // Clear the user's recent messages to prevent immediate re-bans
+                await Promise.all(promises);
                 recentMessages.delete(userId);
             }
         }
