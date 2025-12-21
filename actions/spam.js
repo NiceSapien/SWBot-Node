@@ -1,3 +1,4 @@
+const { MessageEmbed } = require('discord.js');
 const recentMessages = new Map();
 const SPAM_CHANNEL_ID = '814828261044650064';
 const TIMEOUT_DURATION = 2 * 60 * 1000;
@@ -9,7 +10,7 @@ module.exports = {
         const member = message.member;
         const now = Date.now();
         const hasHyperlink = message.content.includes('http://') || message.content.includes('https://');
-        
+
         if (hasHyperlink) {
             const userId = message.author.id;
             const messageData = {
@@ -38,15 +39,22 @@ module.exports = {
                     }
                 });
 
+                await Promise.all(promises); // Delete all spam messages first
+
+                const embed = new MessageEmbed()
+                    .setColor('#FF0000')
+                    .setDescription(`User ${member} was timed out for 2 minutes for: Spamming`)
+                    .setFooter('NikaTech Spam Protection Gen 2');
+
                 try {
                     await member.timeout(TIMEOUT_DURATION, 'Spamming');
-                    message.guild.channels.cache.get(SPAM_CHANNEL_ID).send(`User ${member} was timed out for 2 minutes for: Spamming\n\n*Footer: NikaTech Spam Protection Gen 2*`);
+                    message.guild.channels.cache.get(SPAM_CHANNEL_ID).send({ embeds: [embed] });
                 } catch (timeoutError) {
-                    message.guild.channels.cache.get(SPAM_CHANNEL_ID).send(`Mute and Delete messages permission not found. Unable to timeout ${member} for spamming.\n\n*Footer: NikaTech Spam Protection Gen 2*`);
+                    embed.setDescription(`Mute and Delete messages permission not found. Unable to timeout ${member} for spamming.`);
+                    message.guild.channels.cache.get(SPAM_CHANNEL_ID).send({ embeds: [embed] });
                     console.error(`Timeout failed for ${member.user.tag}:`, timeoutError);
                 }
 
-                await Promise.all(promises);
                 recentMessages.delete(userId);
             }
         }
